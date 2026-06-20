@@ -13,8 +13,6 @@ workflows:
           python3 - <<'PY'
           from pathlib import Path
 
-          # Remove Razorpay Flutter plugin for first APK build.
-          # This keeps the app installable on phone; payment can run in mock mode.
           pubspec = Path('pubspec.yaml')
           text = pubspec.read_text()
           text = '\n'.join([line for line in text.splitlines() if 'razorpay_flutter:' not in line]) + '\n'
@@ -23,6 +21,8 @@ workflows:
           main = Path('lib/main.dart')
           m = main.read_text()
           m = m.replace("import 'package:razorpay_flutter/razorpay_flutter.dart';\n", "")
+          m = m.replace("child: const ListView(children: [", "child: ListView(children: const [")
+          m = m.replace("color: Color(0xFF111827)", "color: const Color(0xFF111827)")
           main.write_text(m)
 
           service = Path('lib/services/razorpay_checkout_service.dart')
