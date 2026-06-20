@@ -1,0 +1,18 @@
+workflows:
+  android-apk:
+    name: Global Exchanger Android APK
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+    scripts:
+      - name: Unzip and Build APK
+        script: |
+          unzip global_exchanger_project.zip -d project
+          cd project/global_exchanger_flutter
+          flutter create --platforms=android .
+          flutter clean
+          flutter pub get
+          flutter build apk --release
+    artifacts:
+      - project/global_exchanger_flutter/build/app/outputs/flutter-apk/app-release.apk
