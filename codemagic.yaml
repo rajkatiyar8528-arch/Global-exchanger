@@ -75,7 +75,21 @@ workflows:
           }
           ''')
           PY
+
           flutter create --platforms=android .
+
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          if 'android.permission.INTERNET' not in text:
+              text = text.replace(
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>'
+              )
+          manifest.write_text(text)
+          PY
+
           flutter clean
           flutter pub get
           flutter build apk --release
