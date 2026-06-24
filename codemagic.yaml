@@ -1,0 +1,78 @@
+workflows:
+  android-apk:
+    name: Global Exchanger Android APK
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+    scripts:
+      - name: Unzip, patch mobile build, and Build APK
+        script: |
+          unzip -o global_exchanger_project.zip -d project
+          cd project/global_exchanger_flutter
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Remove Razorpay Flutter plugin for first APK build.
+          # This keeps the app installable on phone; payment can run in mock mode.
+          pubspec = Path('pubspec.yaml')
+          text = pubspec.read_text()
+          text = '\n'.join([line for line in text.splitlines() if 'razorpay_flutter:' not in line]) + '\n'
+          pubspec.write_text(text)
+
+          main = Path('lib/main.dart')
+          m = main.read_text()
+          m = m.replace("import 'package:razorpay_flutter/razorpay_flutter.dart';\n", "")
+          main.write_text(m)
+
+          service = Path('lib/services/razorpay_checkout_service.dart')
+          service.write_text(r'''
+          class PaymentSuccessResponse {
+            final String? orderId;
+            final String? paymentId;
+            final String? signature;
+            PaymentSuccessResponse({this.orderId, this.paymentId, this.signature});
+          }
+
+          class PaymentFailureResponse {
+            final int? code;
+            final String? message;
+            PaymentFailureResponse({this.code, this.message});
+          }
+
+          class ExternalWalletResponse {
+            final String? walletName;
+            ExternalWalletResponse({this.walletName});
+          }
+
+          class RazorpayCheckoutService {
+            Function(PaymentSuccessResponse)? onSuccess;
+            Function(PaymentFailureResponse)? onFailure;
+            Function(ExternalWalletResponse)? onExternalWallet;
+
+            void openCheckout({
+              required String key,
+              required String orderId,
+              required num amount,
+              required String currency,
+              required String name,
+              required String description,
+              String? userEmail,
+              String? userPhone,
+            }) {
+              onFailure?.call(PaymentFailureResponse(
+                code: 0,
+                message: 'Razorpay SDK disabled in this first APK build. Use mock payment or add Razorpay later.',
+              ));
+            }
+
+            void dispose() {}
+          }
+          ''')
+          PY
+          flutter create --platforms=android .
+          flutter clean
+          flutter pub get
+          flutter build apk --release
+    artifacts:
+      - project/global_exchanger_flutter/build/app/outputs/flutter-apk/app-release.apk
