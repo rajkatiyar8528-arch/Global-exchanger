@@ -84,14 +84,28 @@ workflows:
 
           python3 - <<'PY'
           from pathlib import Path
+
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           text = manifest.read_text()
+
           if 'android.permission.INTERNET' not in text:
-              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>')
+              text = text.replace(
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>'
+              )
+
           if 'android.permission.CAMERA' not in text:
-              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.CAMERA"/>')
+              text = text.replace(
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.CAMERA"/>'
+              )
+
           if 'android.permission.READ_MEDIA_IMAGES' not in text:
-              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>')
+              text = text.replace(
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>'
+              )
+
           manifest.write_text(text)
 
           gradle = Path('android/app/build.gradle.kts')
@@ -104,29 +118,60 @@ workflows:
           flutter clean
           flutter pub get
 
-          echo "Searching qr_code_scanner package build.gradle..."
-          QR_GRADLE=$(find "$HOME/.pub-cache" -path "*/qr_code_scanner-*/android/build.gradle" | head -n 1 || true)
-          echo "QR_GRADLE=$QR_GRADLE"
-          if [ -n "$QR_GRADLE" ]; then
-            echo "Before namespace patch:"
-            grep -n "android" "$QR_GRADLE" | head || true
-            if ! grep -q "namespace" "$QR_GRADLE"; then
-              python3 - "$QR_GRADLE" <<'PY'
-          import sys
+          echo "Patching qr_code_scanner Android namespace and JVM target..."
+          python3 - <<'PY'
           from pathlib import Path
-          p = Path(sys.argv[1])
-          txt = p.read_text()
-          txt = txt.replace('android {', 'android {\n    namespace "net.touchcapture.qr.flutterqr"', 1)
-          p.write_text(txt)
-          print('Patched qr_code_scanner namespace:', p)
+          import glob
+
+          files = glob.glob(str(Path.home() / '.pub-cache/hosted/pub.dev/qr_code_scanner-*/android/build.gradle'))
+          files += glob.glob(str(Path.home() / '.pub-cache/hosted/pub.dev/qr_code_scanner-*/**/android/build.gradle'), recursive=True)
+
+          seen = set()
+
+          for file in files:
+              if file in seen:
+                  continue
+
+              seen.add(file)
+              p = Path(file)
+              txt = p.read_text()
+              changed = False
+
+              if 'android {' in txt and 'namespace ' not in txt:
+                  txt = txt.replace(
+                      'android {',
+                      'android {\n    namespace "net.touchcapture.qr.flutterqr"',
+                      1
+                  )
+                  changed = True
+
+              if 'android {' in txt and 'compileOptions {' not in txt:
+                  txt = txt.replace(
+                      'android {',
+                      'android {\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }',
+                      1
+                  )
+                  changed = True
+
+              if 'android {' in txt and 'kotlinOptions {' not in txt:
+                  txt = txt.replace(
+                      'android {',
+                      'android {\n    kotlinOptions {\n        jvmTarget = "17"\n    }',
+                      1
+                  )
+                  changed = True
+
+              if changed:
+                  p.write_text(txt)
+                  print('Patched qr_code_scanner gradle:', p)
+              else:
+                  print('No qr_code_scanner gradle patch needed:', p)
+
+          if not seen:
+              print('qr_code_scanner build.gradle not found')
           PY
-            fi
-            echo "After namespace patch:"
-            grep -n "namespace" "$QR_GRADLE" || true
-          else
-            echo "qr_code_scanner build.gradle not found"
-          fi
 
           flutter build apk --release
+
     artifacts:
       - project/global_exchanger_flutter/build/app/outputs/flutter-apk/app-release.apk
