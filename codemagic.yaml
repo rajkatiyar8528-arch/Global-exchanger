@@ -137,6 +137,7 @@ workflows:
               txt = p.read_text()
               changed = False
 
+              # Fix namespace issue
               if 'android {' in txt and 'namespace ' not in txt:
                   txt = txt.replace(
                       'android {',
@@ -144,6 +145,23 @@ workflows:
                       1
                   )
                   changed = True
+
+              # Force Java/Kotlin target compatibility to 17
+              replacements = {
+                  'JavaVersion.VERSION_1_8': 'JavaVersion.VERSION_17',
+                  'JavaVersion.VERSION_1_7': 'JavaVersion.VERSION_17',
+                  'sourceCompatibility 1.8': 'sourceCompatibility JavaVersion.VERSION_17',
+                  'targetCompatibility 1.8': 'targetCompatibility JavaVersion.VERSION_17',
+                  'sourceCompatibility = 1.8': 'sourceCompatibility = JavaVersion.VERSION_17',
+                  'targetCompatibility = 1.8': 'targetCompatibility = JavaVersion.VERSION_17',
+                  'jvmTarget = "1.8"': 'jvmTarget = "17"',
+                  "jvmTarget = '1.8'": "jvmTarget = '17'",
+              }
+
+              for old, new in replacements.items():
+                  if old in txt:
+                      txt = txt.replace(old, new)
+                      changed = True
 
               if 'android {' in txt and 'compileOptions {' not in txt:
                   txt = txt.replace(
@@ -159,6 +177,10 @@ workflows:
                       'android {\n    kotlinOptions {\n        jvmTarget = "17"\n    }',
                       1
                   )
+                  changed = True
+
+              if 'tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile)' not in txt:
+                  txt += '\n\ntasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {\n    kotlinOptions {\n        jvmTarget = "17"\n    }\n}\n'
                   changed = True
 
               if changed:
