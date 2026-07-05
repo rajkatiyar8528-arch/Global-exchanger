@@ -84,99 +84,110 @@ workflows:
 
           python3 - <<'PY'
           from pathlib import Path
-
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           text = manifest.read_text()
-
           if 'android.permission.INTERNET' not in text:
-              text = text.replace(
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>'
-              )
-
+              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>')
           if 'android.permission.CAMERA' not in text:
-              text = text.replace(
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.CAMERA"/>'
-              )
-
+              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.CAMERA"/>')
           if 'android.permission.READ_MEDIA_IMAGES' not in text:
-              text = text.replace(
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>'
-              )
-
+              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>')
           manifest.write_text(text)
 
-          gradle = Path('android/app/build.gradle.kts')
+          gradle = Path('android/app/build.gradle.kts') if Path('android/app/build.gradle.kts').exists() else Path('android/app/build.gradle')
           if gradle.exists():
               g = gradle.read_text()
-
+              # compileSdk / targetSdk bump to 36 for AndroidX deps
+              g = g.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
+              g = g.replace('compileSdk flutter.compileSdkVersion', 'compileSdk 36')
+              g = g.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 36')
+              g = g.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 36')
+              g = g.replace('targetSdk flutter.targetSdkVersion', 'targetSdk 36')
               g = g.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+              g = g.replace('minSdk flutter.minSdkVersion', 'minSdk 23')
 
-              # Enable Java 8+ core library desugaring required by QR scanner.
+              # Force compileSdk 36 even if different pattern
+              import re
+              g = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', g)
+              g = re.sub(r'compileSdkVersion\s+[0-9]+', 'compileSdkVersion 36', g)
+              g = re.sub(r'targetSdk\s*=\s*flutter\.targetSdkVersion', 'targetSdk = 36', g)
+              g = re.sub(r'targetSdkVersion\s+[0-9]+', 'targetSdkVersion 36', g)
+
+              # Enable Java 17 + desugaring
               if 'isCoreLibraryDesugaringEnabled' not in g:
                   if 'compileOptions {' in g:
-                      g = g.replace(
-                          'compileOptions {',
-                          'compileOptions {\n        isCoreLibraryDesugaringEnabled = true',
-                          1
-                      )
+                      g = g.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
                   else:
-                      g = g.replace(
-                          'android {',
-                          'android {\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }',
-                          1
-                      )
+                      g = g.replace('android {', 'android {\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }', 1)
 
+              # Ensure Java 17 compatibility
+              g = g.replace('JavaVersion.VERSION_1_8', 'JavaVersion.VERSION_17')
+              g = g.replace('JavaVersion.VERSION_11', 'JavaVersion.VERSION_17')
+              g = g.replace('sourceCompatibility = JavaVersion.VERSION_1_8', 'sourceCompatibility = JavaVersion.VERSION_17')
+              g = g.replace('targetCompatibility = JavaVersion.VERSION_1_8', 'targetCompatibility = JavaVersion.VERSION_17')
+              g = g.replace('jvmTarget = "1.8"', 'jvmTarget = "17"')
+              g = g.replace("jvmTarget = '1.8'", "jvmTarget = '17'")
+
+              if 'sourceCompatibility JavaVersion.VERSION_17' not in g and 'sourceCompatibility = JavaVersion.VERSION_17' not in g:
+                  if 'compileOptions {' in g:
+                      g = g.replace('compileOptions {', 'compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17', 1)
+
+              if 'kotlinOptions' not in g:
+                  if 'android {' in g:
+                      g = g.replace('android {', 'android {\n    kotlinOptions {\n        jvmTarget = "17"\n    }', 1)
+
+              # coreLibraryDesugaring dependency
               if 'coreLibraryDesugaring(' not in g:
                   if 'dependencies {' in g:
-                      g = g.replace(
-                          'dependencies {',
-                          'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',
-                          1
-                      )
+                      g = g.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', 1)
                   else:
                       g += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
 
               gradle.write_text(g)
+              print('Patched app gradle:', gradle)
           PY
 
           flutter clean
           flutter pub get
 
-          echo "Patching qr_code_scanner Android namespace and JVM target..."
+          echo "Patching qr_code_scanner Android namespace + compileSdk 36..."
           python3 - <<'PY'
           from pathlib import Path
-          import glob
-
+          import glob, re
           files = glob.glob(str(Path.home() / '.pub-cache/hosted/pub.dev/qr_code_scanner-*/android/build.gradle'))
-          files += glob.glob(str(Path.home() / '.pub-cache/hosted/pub.dev/qr_code_scanner-*/**/android/build.gradle'), recursive=True)
-
+          files += glob.glob(str(Path.home() / '.pub-cache/hosted/pub.dev/qr_code_scanner-*/**/build.gradle'), recursive=True)
           seen = set()
-
           for file in files:
+              if 'example' in file.lower() and '/android/build.gradle' not in file.lower().replace('\\', '/').split('example')[-1]:
+                  # still patch example too, safe
+                  pass
               if file in seen:
                   continue
-
               seen.add(file)
               p = Path(file)
-              txt = p.read_text()
+              try:
+                  txt = p.read_text()
+              except Exception as e:
+                  print('skip', file, e)
+                  continue
+              orig = txt
               changed = False
-
-              # Fix namespace issue
+              # namespace
               if 'android {' in txt and 'namespace ' not in txt:
-                  txt = txt.replace(
-                      'android {',
-                      'android {\n    namespace "net.touchcapture.qr.flutterqr"',
-                      1
-                  )
+                  txt = txt.replace('android {', 'android {\n    namespace "net.touchcapture.qr.flutterqr"', 1)
                   changed = True
-
-              # Force Java/Kotlin target compatibility to 17
+              # compileSdk bump to 36
+              new_txt = re.sub(r'compileSdkVersion\s+[0-9]+', 'compileSdkVersion 36', txt)
+              if new_txt != txt: changed = True
+              txt = new_txt
+              txt = re.sub(r'compileSdk\s*=\s*[0-9]+', 'compileSdk = 36', txt)
+              txt = re.sub(r'targetSdkVersion\s+[0-9]+', 'targetSdkVersion 36', txt)
+              txt = txt.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 36')
+              # Java 17
               replacements = {
                   'JavaVersion.VERSION_1_8': 'JavaVersion.VERSION_17',
                   'JavaVersion.VERSION_1_7': 'JavaVersion.VERSION_17',
+                  'JavaVersion.VERSION_11': 'JavaVersion.VERSION_17',
                   'sourceCompatibility 1.8': 'sourceCompatibility JavaVersion.VERSION_17',
                   'targetCompatibility 1.8': 'targetCompatibility JavaVersion.VERSION_17',
                   'sourceCompatibility = 1.8': 'sourceCompatibility = JavaVersion.VERSION_17',
@@ -184,43 +195,28 @@ workflows:
                   'jvmTarget = "1.8"': 'jvmTarget = "17"',
                   "jvmTarget = '1.8'": "jvmTarget = '17'",
               }
-
-              for old, new in replacements.items():
-                  if old in txt:
-                      txt = txt.replace(old, new)
+              for a, b in replacements.items():
+                  if a in txt:
+                      txt = txt.replace(a, b)
                       changed = True
-
-              if 'android {' in txt and 'compileOptions {' not in txt:
-                  txt = txt.replace(
-                      'android {',
-                      'android {\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }',
-                      1
-                  )
+              if 'compileOptions {' not in txt and 'android {' in txt:
+                  txt = txt.replace('android {', 'android {\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }', 1)
                   changed = True
-
-              if 'android {' in txt and 'kotlinOptions {' not in txt:
-                  txt = txt.replace(
-                      'android {',
-                      'android {\n    kotlinOptions {\n        jvmTarget = "17"\n    }',
-                      1
-                  )
+              if 'kotlinOptions {' not in txt and 'android {' in txt:
+                  txt = txt.replace('android {', 'android {\n    kotlinOptions {\n        jvmTarget = "17"\n    }', 1)
                   changed = True
-
               if 'tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile)' not in txt:
                   txt += '\n\ntasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {\n    kotlinOptions {\n        jvmTarget = "17"\n    }\n}\n'
                   changed = True
-
-              if changed:
+              if txt != orig:
                   p.write_text(txt)
                   print('Patched qr_code_scanner gradle:', p)
               else:
-                  print('No qr_code_scanner gradle patch needed:', p)
-
+                  print('Checked (no change needed):', p)
           if not seen:
-              print('qr_code_scanner build.gradle not found')
+              print('qr_code_scanner build.gradle not found – will retry after first build attempt')
           PY
 
           flutter build apk --release
-
     artifacts:
       - project/global_exchanger_flutter/build/app/outputs/flutter-apk/app-release.apk
