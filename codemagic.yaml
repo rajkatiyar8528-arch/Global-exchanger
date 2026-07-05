@@ -152,15 +152,7 @@ workflows:
 
               # ADD AGP 9 kotlin compilerOptions block at end if not present
               if 'kotlin {' not in g or 'compilerOptions' not in g:
-                  g += '''
-
-// AGP 9 Kotlin built-in migration
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
-'''
+                  g += "\n\n// AGP 9 Kotlin built-in migration\nkotlin {\n    compilerOptions {\n        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)\n    }\n}\n"
               print('=== AFTER PATCH (first 120 lines) ===')
               print('\n'.join(g.splitlines()[:120]))
               gradle.write_text(g)
@@ -198,3 +190,4 @@ kotlin {
           flutter build apk --release
     artifacts:
       - project/global_exchanger_flutter/build/app/outputs/flutter-apk/app-release.apk
+  
