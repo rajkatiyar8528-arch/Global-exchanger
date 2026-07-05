@@ -98,7 +98,7 @@ workflows:
           gradle = Path('android/app/build.gradle.kts') if Path('android/app/build.gradle.kts').exists() else Path('android/app/build.gradle')
           if gradle.exists():
               g = gradle.read_text()
-              # Remove kotlin-android plugin (AGP 9)
+              # Remove kotlin-android plugin AGP9
               g = re.sub(r'\s*id\s*\(\s*["\']kotlin-android["\']\s*\)\s*\n?', '\n', g)
               g = re.sub(r'\s*kotlin\s*\(\s*["\']android["\']\s*\)\s*\n?', '\n', g)
               g = re.sub(r'id\s*\(\s*["\']org\.jetbrains\.kotlin\.android["\']\s*\)', '', g)
@@ -126,21 +126,26 @@ workflows:
               if 'coreLibraryDesugaring(' not in g:
                   if 'dependencies {' in g:
                       g = g.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', 1)
-              # Disable R8 minify for ML Kit
+              # Disable R8 minify - Kotlin DSL correct
               g = re.sub(r'isMinifyEnabled\s*=\s*true', 'isMinifyEnabled = false', g)
-              g = re.sub(r'minifyEnabled\s*=?\s*true', 'minifyEnabled = false', g)
+              g = re.sub(r'minifyEnabled\s*=?\s*true', 'isMinifyEnabled = false', g)
               g = re.sub(r'isShrinkResources\s*=\s*true', 'isShrinkResources = false', g)
-              g = re.sub(r'shrinkResources\s*=?\s*true', 'shrinkResources = false', g)
+              g = re.sub(r'shrinkResources\s*=?\s*true', 'isShrinkResources = false', g)
+              # Fix any groovy syntax left in .kts file
+              g = g.replace('minifyEnabled false', 'isMinifyEnabled = false')
+              g = g.replace('shrinkResources false', 'isShrinkResources = false')
+              g = re.sub(r'isMinifyEnabled\s+false', 'isMinifyEnabled = false', g)
+              g = re.sub(r'isShrinkResources\s+false', 'isShrinkResources = false', g)
               if 'buildTypes' in g:
                   if 'getByName("release")' in g and 'isMinifyEnabled' not in g.split('getByName("release")',1)[1].split('}',1)[0]:
-                      g = g.replace('getByName("release") {', 'getByName("release") {\n            isMinifyEnabled = false\n            isShrinkResources = false\n            isDebuggable = false', 1)
-                  if 'release {' in g and g.count('isMinifyEnabled = false') < 1:
-                      g = g.replace('release {', 'release {\n            minifyEnabled false\n            shrinkResources false\n', 1)
+                      g = g.replace('getByName("release") {', 'getByName("release") {\n            isMinifyEnabled = false\n            isShrinkResources = false', 1)
+                  if 'release {' in g and 'isMinifyEnabled = false' not in g:
+                      g = g.replace('release {', 'release {\n            isMinifyEnabled = false\n            isShrinkResources = false\n', 1)
               # AGP 9 kotlin compilerOptions
               if 'kotlin {' not in g or 'compilerOptions' not in g:
                   g += "\n\n// AGP 9 Kotlin built-in migration\nkotlin {\n    compilerOptions {\n        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)\n    }\n}\n"
               gradle.write_text(g)
-              # ProGuard keep rules (YAML-safe escaped string)
+              # ProGuard keep rules
               proguard = Path('android/app/proguard-rules.pro')
               proguard.write_text("-keep class com.google.mlkit.** { *; }\n-dontwarn com.google.mlkit.**\n-keep class com.google.android.gms.internal.mlkit.** { *; }\n-keep class com.google.android.gms.** { *; }\n-dontwarn com.google.android.gms.**\n-keep class io.flutter.plugins.** { *; }\n-keep class net.touchcapture.qr.** { *; }\n-keepattributes *Annotation*\n-keepattributes Signature\n-keepattributes Exceptions\n")
           PY
