@@ -82,7 +82,6 @@ workflows:
 
           flutter create --platforms=android .
 
-          # --- AGP 9 + compileSdk 36 patch ---
           python3 - <<'PY'
           from pathlib import Path
           import re
@@ -127,7 +126,7 @@ workflows:
               if 'coreLibraryDesugaring(' not in g:
                   if 'dependencies {' in g:
                       g = g.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', 1)
-              # === Disable R8 minify for ML Kit ===
+              # Disable R8 minify for ML Kit
               g = re.sub(r'isMinifyEnabled\s*=\s*true', 'isMinifyEnabled = false', g)
               g = re.sub(r'minifyEnabled\s*=?\s*true', 'minifyEnabled = false', g)
               g = re.sub(r'isShrinkResources\s*=\s*true', 'isShrinkResources = false', g)
@@ -141,20 +140,9 @@ workflows:
               if 'kotlin {' not in g or 'compilerOptions' not in g:
                   g += "\n\n// AGP 9 Kotlin built-in migration\nkotlin {\n    compilerOptions {\n        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)\n    }\n}\n"
               gradle.write_text(g)
-              # ProGuard keep rules for ML Kit
+              # ProGuard keep rules (YAML-safe escaped string)
               proguard = Path('android/app/proguard-rules.pro')
-              proguard.write_text('''
--keep class com.google.mlkit.** { *; }
--dontwarn com.google.mlkit.**
--keep class com.google.android.gms.internal.mlkit.** { *; }
--keep class com.google.android.gms.** { *; }
--dontwarn com.google.android.gms.**
--keep class io.flutter.plugins.** { *; }
--keep class net.touchcapture.qr.** { *; }
--keepattributes *Annotation*
--keepattributes Signature
--keepattributes Exceptions
-''')
+              proguard.write_text("-keep class com.google.mlkit.** { *; }\n-dontwarn com.google.mlkit.**\n-keep class com.google.android.gms.internal.mlkit.** { *; }\n-keep class com.google.android.gms.** { *; }\n-dontwarn com.google.android.gms.**\n-keep class io.flutter.plugins.** { *; }\n-keep class net.touchcapture.qr.** { *; }\n-keepattributes *Annotation*\n-keepattributes Signature\n-keepattributes Exceptions\n")
           PY
 
           flutter clean
