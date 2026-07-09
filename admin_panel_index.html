@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Global Exchanger Admin Panel</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,Arial,sans-serif}body{background:#0f172a;color:#0f172a}.wrap{max-width:1200px;margin:0 auto;padding:24px}.login,.panel{background:#f8fbff;border-radius:28px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35)}.panel{display:none}.hero{background:linear-gradient(135deg,#111827,#0967ff);color:white;border-radius:24px;padding:24px;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}.card{background:white;border:1px solid #e5edff;border-radius:20px;padding:18px;margin:12px 0;box-shadow:0 8px 18px rgba(12,55,120,.06)}.metric b{font-size:30px;display:block;margin-top:8px}.input{width:100%;padding:14px;border:1px solid #d8e4ff;border-radius:14px;margin:8px 0}.btn{border:0;border-radius:14px;padding:14px 18px;font-weight:900;cursor:pointer;background:#0967ff;color:white}.btn.dark{background:#111827}.row{display:flex;justify-content:space-between;align-items:center;gap:12px}.table{width:100%;border-collapse:collapse;background:white;border-radius:16px;overflow:hidden}.table th,.table td{padding:12px;border-bottom:1px solid #eef2fb;text-align:left;font-size:14px}.pill{padding:5px 10px;border-radius:999px;background:#e8fff5;color:#00935e;font-weight:800;font-size:12px}.err{color:#dc2626;margin-top:8px}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <section id="login" class="login">
+    <div class="hero"><h1>Global Exchanger Admin Panel</h1><p>Secure admin login with special key</p></div>
+    <input id="api" class="input" value="https://global-exchanger.onrender.com" placeholder="API Base URL">
+    <input id="email" class="input" value="admin@globalexchanger.com" placeholder="Admin Email">
+    <input id="password" class="input" value="Admin@12345" type="password" placeholder="Password">
+    <input id="specialKey" class="input" value="GX-SUPER-KEY-2026" type="password" placeholder="Special Key">
+    <button class="btn" onclick="adminLogin()">Login Admin</button>
+    <p id="loginErr" class="err"></p>
+  </section>
+
+  <section id="panel" class="panel">
+    <div class="hero row"><div><h1>Admin Dashboard</h1><p id="apiLabel"></p></div><button class="btn dark" onclick="logout()">Logout</button></div>
+    <div class="grid">
+      <div class="card metric">Users<b id="mUsers">0</b></div>
+      <div class="card metric">KYC Pending<b id="mKyc">0</b></div>
+      <div class="card metric">Transactions<b id="mTxn">0</b></div>
+      <div class="card metric">Complaints<b id="mComp">0</b></div>
+      <div class="card metric">Commission<b id="mComm">0</b></div>
+    </div>
+    <div class="card row"><h2>Admin Role Assignment</h2><button class="btn" onclick="loadAdmins()">Refresh Admins</button></div>
+    <div class="card"><table class="table"><thead><tr><th>Email</th><th>Role</th><th>Permissions</th><th>Action</th></tr></thead><tbody id="adminsBody"></tbody></table></div>
+    <div class="card row"><h2>Users</h2><button class="btn" onclick="loadUsers()">Refresh Users</button></div>
+    <div class="card"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Country</th><th>KYC</th><th>Referral</th></tr></thead><tbody id="usersBody"></tbody></table></div>
+    <div class="card row"><h2>Exchange Escrow Orders</h2><button class="btn" onclick="loadExchange()">Refresh Exchange</button></div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Pair</th><th>Amount</th><th>Status</th><th>Escrow</th><th>Action</th></tr></thead><tbody id="exchangeBody"></tbody></table></div>
+    <div class="card row"><h2>KYC Approval</h2><button class="btn" onclick="loadKyc()">Refresh KYC</button></div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Country</th><th>National ID</th><th>Tax ID</th><th>Status</th><th>Action</th></tr></thead><tbody id="kycBody"></tbody></table></div>
+    <div class="card row"><h2>Payment Orders</h2><button class="btn" onclick="loadPayments()">Refresh Payments</button></div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Provider</th><th>Amount</th><th>Status</th><th>Gateway Order</th><th>Refund</th></tr></thead><tbody id="paymentsBody"></tbody></table></div>
+    <div class="card row"><h2>Dispute Management</h2><button class="btn" onclick="loadDisputes()">Refresh Disputes</button></div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Transaction</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead><tbody id="disputesBody"></tbody></table></div>
+    <div class="card row"><h2>Complaints</h2><button class="btn" onclick="loadComplaints()">Refresh Complaints</button></div>
+    <div class="card"><table class="table"><thead><tr><th>Subject</th><th>Message</th><th>Status</th><th>Date</th></tr></thead><tbody id="complaintsBody"></tbody></table></div>
+    <div class="card row"><h2>Admin Audit Logs</h2><button class="btn" onclick="loadAudit()">Refresh Audit</button></div>
+    <div class="card"><table class="table"><thead><tr><th>Action</th><th>Entity</th><th>Admin</th><th>Date</th></tr></thead><tbody id="auditBody"></tbody></table></div>
+  </section>
+</div>
+<script>
+let token = localStorage.getItem('gx_admin_token') || '';
+let baseUrl = localStorage.getItem('gx_api') || 'https://global-exchanger.onrender.com';
+document.getElementById('api').value = baseUrl;
+function headers(){return {'Content-Type':'application/json','Authorization':'Bearer '+token}}
+async function request(path, options={}){const r=await fetch(baseUrl+path, options); const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'API error'); return d;}
+async function adminLogin(){
+  baseUrl=document.getElementById('api').value.trim(); localStorage.setItem('gx_api',baseUrl);
+  try{const d=await request('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email.value,password:password.value,specialKey:specialKey.value})}); token=d.token; localStorage.setItem('gx_admin_token',token); showPanel();}
+  catch(e){loginErr.textContent=e.message}
+}
+function logout(){localStorage.removeItem('gx_admin_token'); token=''; login.style.display='block'; panel.style.display='none'}
+function showPanel(){login.style.display='none'; panel.style.display='block'; apiLabel.textContent='API: '+baseUrl; loadDashboard(); loadAdmins(); loadUsers(); loadExchange(); loadKyc(); loadPayments(); loadDisputes(); loadComplaints(); loadAudit();}
+async function loadDashboard(){const d=await request('/api/admin/dashboard',{headers:headers()}); mUsers.textContent=d.users||0; mKyc.textContent=d.kycPending||0; mTxn.textContent=d.transactions||0; mComp.textContent=d.complaints||0; mComm.textContent='₹'+Number(d.adminCommission||0).toFixed(2)}
+async function loadUsers(){const rows=await request('/api/admin/users',{headers:headers()}); usersBody.innerHTML=rows.map(u=>`<tr><td>${u.name||''}</td><td>${u.email||''}</td><td>${u.country||''}</td><td><span class="pill">${u.kycStatus||u.kyc_status||'pending'}</span></td><td>${u.referralCode||u.referral_code||''}</td></tr>`).join('')||'<tr><td colspan="5">No users</td></tr>'; loadDashboard();}
+async function loadComplaints(){const rows=await request('/api/admin/complaints',{headers:headers()}); complaintsBody.innerHTML=rows.map(c=>`<tr><td>${c.subject||''}</td><td>${c.message||''}</td><td><span class="pill">${c.status||''}</span></td><td>${new Date(c.created_at||c.createdAt).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="4">No complaints</td></tr>'; loadDashboard();}
+</script>
+</body>
+</html>
+
+<script>
+async function loadKyc(){
+  const rows=await request('/api/admin/kyc-requests',{headers:headers()});
+  kycBody.innerHTML=rows.map(k=>`<tr><td>${k.user?.name||''}<br><small>${k.user?.email||''}</small></td><td>${k.country||''}</td><td>${k.nationalId||k.national_id||''}</td><td>${k.taxId||k.tax_id||''}</td><td><span class="pill">${k.status||''}</span><br><small>${(k.documentNames||k.document_names||[]).length} doc(s)</small></td><td><button class="btn" onclick="viewKycDocuments('${k.id}')">View Docs</button> <button class="btn" onclick="updateKyc('${k.id}','approved')">Approve</button> <button class="btn dark" onclick="updateKyc('${k.id}','rejected')">Reject</button></td></tr>`).join('')||'<tr><td colspan="6">No KYC requests</td></tr>';
+}
+async function updateKyc(id,status){await request('/api/admin/kyc/'+id,{method:'PATCH',headers:headers(),body:JSON.stringify({status})}); loadKyc(); loadDashboard();}
+async function viewKycDocuments(id){
+  try{
+    const data = await request('/api/admin/kyc-requests/'+id+'/documents',{headers:headers()});
+    const docs = data.documents || [];
+    if(docs.length === 0){ alert('Is KYC request ke saath koi document upload nahi hua.'); return; }
+    const win = window.open('', '_blank');
+    if(!win){ alert('Popup blocked. Please allow popups for this site.'); return; }
+    const body = docs.map(d => {
+      if((d.mimeType||'').startsWith('image/')){
+        return `<div style="margin-bottom:24px"><h3>${d.label}</h3><img src="data:${d.mimeType};base64,${d.dataBase64}" style="max-width:100%;border-radius:12px;border:1px solid #ddd" /></div>`;
+      }
+      return `<div style="margin-bottom:24px"><h3>${d.label}</h3><a download="${d.label}" href="data:${d.mimeType};base64,${d.dataBase64}">Download ${d.label}</a></div>`;
+    }).join('');
+    win.document.write(`<html><head><title>KYC Documents</title></head><body style="font-family:Arial;padding:24px;background:#0f172a;color:white">${body}</body></html>`);
+  } catch(e){ alert('Failed to load documents: ' + e.message); }
+}
+async function loadPayments(){
+  const rows=await request('/api/admin/payment-orders',{headers:headers()});
+  paymentsBody.innerHTML=rows.map(o=>`<tr><td>${o.user?.name||''}<br><small>${o.user?.email||''}</small></td><td>${o.provider||''}</td><td>${o.currency||''} ${o.amount||''}</td><td><span class="pill">${o.status||''}</span></td><td>${o.gatewayOrderId||o.gateway_order_id||''}</td><td>${(o.status==='paid')?`<button class="btn dark" onclick="refundOrder('${o.id}')">Refund</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6">No payment orders</td></tr>';
+}
+
+
+async function loadAdmins(){
+  const rows=await request('/api/admin/admins',{headers:headers()});
+  adminsBody.innerHTML=rows.map(a=>`<tr><td>${a.email||''}</td><td>${a.role||''}</td><td><small>${(a.permissions||[]).join(', ')}</small></td><td><button class="btn" onclick="editAdminRole('${a.id}','${a.role||'support_agent'}','${(a.permissions||[]).join(',')}')">Edit</button></td></tr>`).join('')||'<tr><td colspan="4">No admins</td></tr>';
+}
+async function editAdminRole(id,currentRole,currentPerms){
+  const role=prompt('Role: super_admin / kyc_manager / finance_manager / support_agent', currentRole); if(!role) return;
+  const perms=prompt('Comma permissions', currentPerms); if(perms===null) return;
+  await request('/api/admin/admins/'+id+'/role',{method:'PATCH',headers:headers(),body:JSON.stringify({role,permissions:perms.split(',').map(x=>x.trim()).filter(Boolean)})});
+  loadAdmins(); loadAudit(); alert('Role updated');
+}
+async function loadDisputes(){
+  const rows=await request('/api/admin/disputes',{headers:headers()});
+  disputesBody.innerHTML=rows.map(d=>`<tr><td>${d.user?.name||''}<br><small>${d.user?.email||''}</small></td><td>${d.transactionId||d.transaction_id||''}</td><td>${d.reason||''}<br><small>${d.message||''}</small></td><td><span class="pill">${d.status||''}</span></td><td><button class="btn" onclick="updateDispute('${d.id}')">Update</button></td></tr>`).join('')||'<tr><td colspan="5">No disputes</td></tr>';
+}
+async function updateDispute(id){
+  const status=prompt('Status: submitted / under_review / resolved / rejected', 'under_review'); if(!status) return;
+  const adminNote=prompt('Admin note', '');
+  const resolution=prompt('Resolution', '');
+  await request('/api/admin/disputes/'+id,{method:'PATCH',headers:headers(),body:JSON.stringify({status,adminNote,resolution})});
+  loadDisputes(); loadAudit(); alert('Dispute updated');
+}
+
+async function loadExchange(){
+  const rows=await request('/api/admin/exchange/orders',{headers:headers()});
+  exchangeBody.innerHTML=rows.map(o=>`<tr><td>${o.user?.name||''}<br><small>${o.user?.email||''}</small></td><td>${o.fromCurrency||o.from_currency} → ${o.toCurrency||o.to_currency}</td><td>${o.amount}</td><td><span class="pill">${o.status||''}</span></td><td>${o.escrowStatus||o.escrow_status||''}</td><td><button class="btn" onclick="completeExchange('${o.id}')">Complete</button> <button class="btn dark" onclick="cancelExchange('${o.id}')">Cancel</button></td></tr>`).join('')||'<tr><td colspan="6">No exchange orders</td></tr>';
+}
+async function completeExchange(id){const rate=prompt('Enter rate / receive amount multiplier', '1'); if(!rate) return; await request('/api/admin/exchange/orders/'+id+'/complete',{method:'POST',headers:headers(),body:JSON.stringify({rate:Number(rate)})}); loadExchange(); loadDashboard(); alert('Exchange completed');}
+async function cancelExchange(id){if(!confirm('Cancel exchange?')) return; await request('/api/admin/exchange/orders/'+id+'/cancel',{method:'POST',headers:headers()}); loadExchange(); loadDashboard();}
+async function loadAudit(){const rows=await request('/api/admin/audit-logs',{headers:headers()}); auditBody.innerHTML=rows.map(a=>`<tr><td>${a.action||''}</td><td>${a.entityType||a.entity_type||''}: ${a.entityId||a.entity_id||''}</td><td>${a.adminId||a.admin_id||''}</td><td>${new Date(a.createdAt||a.created_at).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="4">No audit logs</td></tr>';}
+
+async function refundOrder(id){ if(!confirm('Refund this payment order?')) return; await request('/api/payments/refund',{method:'POST',headers:headers(),body:JSON.stringify({orderId:id,reason:'admin_panel_refund'})}); loadPayments(); loadDashboard(); alert('Refund processed');}
+if(token) showPanel();
+</script>
