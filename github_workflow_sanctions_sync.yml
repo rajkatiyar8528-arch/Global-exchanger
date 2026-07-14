@@ -1,0 +1,77 @@
+name: Weekly Sanctions List Auto-Sync
+
+# ---------------------------------------------------------------------------
+# Automatically triggers the Global Exchanger backend to refresh its
+# sanctions/PEP screening dataset (OFAC + UN sources) once a week, WITHOUT
+# needing anyone to manually click the admin panel button.
+#
+# This is completely free (GitHub Actions free tier includes generous
+# scheduled-workflow minutes for public repos) and runs on GitHub's own
+# servers on a fixed schedule — it does NOT depend on your Render app
+# being awake, your phone being on, or anyone remembering to do anything.
+# It simply sends one HTTP request to your live backend; the backend does
+# all the actual fetching/parsing/merging work (see
+# backend/src/sanctions_sync.js and SANCTIONS_AUTO_UPDATE_GUIDE.md).
+#
+# SETUP REQUIRED (one-time, see SANCTIONS_AUTO_UPDATE_GUIDE.md for full
+# step-by-step instructions):
+#   1. On Render, set an environment variable SANCTIONS_CRON_SECRET to any
+#      long random value (e.g. generate one with `openssl rand -hex 32`,
+#      or just mash the keyboard for 40+ characters).
+#   2. In this GitHub repo, go to Settings -> Secrets and variables ->
+#      Actions -> "New repository secret", name it SANCTIONS_CRON_SECRET,
+#      and paste the EXACT SAME value you set in Render.
+#   3. That's it — this workflow will now run automatically every week.
+#
+# Without step 1+2, this workflow will still run on schedule but every
+# attempt will fail with a 403/404 (harmless — no data is lost, the
+# existing sanctions list is simply not refreshed until you complete
+# setup, or you can still refresh it manually via the admin panel button
+# in the meantime).
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    # Runs every Monday at 03:00 UTC (~08:30 AM IST) — a quiet time in
+    # India, unlikely to overlap with real user traffic. Cron syntax:
+    # minute hour day-of-month month day-of-week
+    - cron: '0 3 * * 1'
+  # Also allows manually triggering this workflow from the GitHub Actions
+  # tab ("Run workflow" button) any time you want an on-demand sync outside
+  # the weekly schedule, without needing to open the admin panel.
+  workflow_dispatch:
+
+jobs:
+  sync-sanctions-list:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger sanctions list sync on live backend
+        env:
+          # Update this if your Render backend URL ever changes.
+          BACKEND_URL: https://global-exchanger.onrender.com
+          CRON_SECRET: ${{ secrets.SANCTIONS_CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::warning::SANCTIONS_CRON_SECRET repository secret is not set. Skipping sync — see SANCTIONS_AUTO_UPDATE_GUIDE.md for one-time setup instructions."
+            exit 0
+          fi
+
+          echo "Waking up backend (Render free tier may need ~30-60s to cold-start)..."
+          curl -sS --max-time 60 "$BACKEND_URL/" || echo "Initial wake-up ping failed or timed out — will still attempt sync below in case the app is actually awake."
+
+          echo "Triggering sanctions list sync..."
+          HTTP_STATUS=$(curl -sS --max-time 120 -o /tmp/response.json -w "%{http_code}" \
+            -X POST "$BACKEND_URL/api/cron/sanctions-sync" \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: $CRON_SECRET")
+
+          echo "Response (HTTP $HTTP_STATUS):"
+          cat /tmp/response.json
+          echo ""
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Sanctions sync failed with HTTP $HTTP_STATUS. Check the response above, and verify SANCTIONS_CRON_SECRET matches on both Render and GitHub."
+            exit 1
+          fi
+
+          echo "Sanctions list sync completed successfully."
