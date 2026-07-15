@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Global Exchanger Admin Panel</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,Arial,sans-serif}body{background:#0f172a;color:#0f172a}.wrap{max-width:1200px;margin:0 auto;padding:24px}.login,.panel{background:#f8fbff;border-radius:28px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35)}.panel{display:none}.hero{background:linear-gradient(135deg,#111827,#0967ff);color:white;border-radius:24px;padding:24px;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}.card{background:white;border:1px solid #e5edff;border-radius:20px;padding:18px;margin:12px 0;box-shadow:0 8px 18px rgba(12,55,120,.06)}.metric b{font-size:30px;display:block;margin-top:8px}.input{width:100%;padding:14px;border:1px solid #d8e4ff;border-radius:14px;margin:8px 0}.btn{border:0;border-radius:14px;padding:14px 18px;font-weight:900;cursor:pointer;background:#0967ff;color:white}.btn.dark{background:#111827}.row{display:flex;justify-content:space-between;align-items:center;gap:12px}.table{width:100%;border-collapse:collapse;background:white;border-radius:16px;overflow:hidden}.table th,.table td{padding:12px;border-bottom:1px solid #eef2fb;text-align:left;font-size:14px}.pill{padding:5px 10px;border-radius:999px;background:#e8fff5;color:#00935e;font-weight:800;font-size:12px}.err{color:#dc2626;margin-top:8px}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+.metric.today b{color:#0967ff}.metric.today.alert b{color:#dc2626}.analytics-grid{grid-template-columns:repeat(2,1fr)}.analytics-grid .card h3{font-size:14px;color:#555;margin-bottom:10px}@media(max-width:900px){.analytics-grid{grid-template-columns:1fr}}canvas{width:100%!important;max-width:100%}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <section id="login" class="login">
+    <div class="hero"><h1>Global Exchanger Admin Panel</h1><p>Secure admin login with special key</p></div>
+    <input id="api" class="input" value="https://global-exchanger.onrender.com" placeholder="API Base URL">
+    <input id="email" class="input" value="" placeholder="Admin Email">
+    <input id="password" class="input" value="" type="password" placeholder="Password">
+    <input id="specialKey" class="input" value="" type="password" placeholder="Special Key">
+    <button class="btn" onclick="adminLogin()">Login Admin</button>
+    <p id="loginErr" class="err"></p>
+  </section>
+
+  <section id="panel" class="panel">
+    <div class="hero row"><div><h1>Admin Dashboard</h1><p id="apiLabel"></p></div><button class="btn dark" onclick="logout()">Logout</button></div>
+    <div class="grid">
+      <div class="card metric">Users<b id="mUsers">0</b></div>
+      <div class="card metric">KYC Pending<b id="mKyc">0</b></div>
+      <div class="card metric">Transactions<b id="mTxn">0</b></div>
+      <div class="card metric">Complaints<b id="mComp">0</b><span id="mCompUnread" style="color:#dc2626;font-weight:800;font-size:12px"></span></div>
+      <div class="card metric">Commission<b id="mComm">0</b></div>
+    </div>
+    <div class="grid">
+      <div class="card metric today">Today's New Users<b id="tUsers">0</b></div>
+      <div class="card metric today">Today's Transactions<b id="tTxn">0</b></div>
+      <div class="card metric today">Today's Revenue<b id="tRev">₹0</b></div>
+      <div class="card metric today">Today's Payment Volume<b id="tVol">₹0</b></div>
+      <div class="card metric today alert">Open Complaints/Disputes<b id="tOpen">0</b></div>
+    </div>
+
+    <div class="card row"><h2>📊 Analytics</h2>
+      <div>
+        <select id="analyticsRange" class="input" style="width:auto;display:inline-block;margin:0 8px 0 0" onchange="loadAnalytics()">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+        <button class="btn" onclick="loadAnalytics()">Refresh Analytics</button>
+      </div>
+    </div>
+    <div class="grid analytics-grid">
+      <div class="card">
+        <h3>Revenue Trend (Admin Commission)</h3>
+        <canvas id="chartRevenue" height="160"></canvas>
+      </div>
+      <div class="card">
+        <h3>New User Signups</h3>
+        <canvas id="chartUsers" height="160"></canvas>
+      </div>
+      <div class="card">
+        <h3>Transaction Volume</h3>
+        <canvas id="chartTxns" height="160"></canvas>
+      </div>
+      <div class="card">
+        <h3>Payment Status Breakdown</h3>
+        <canvas id="chartPayments" height="160"></canvas>
+      </div>
+      <div class="card">
+        <h3>Exchange Order Status</h3>
+        <canvas id="chartExchangeStatus" height="160"></canvas>
+      </div>
+      <div class="card">
+        <h3>KYC Funnel</h3>
+        <canvas id="chartKyc" height="160"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Top Currency Pairs (by order count)</h3>
+      <table class="table"><thead><tr><th>Pair</th><th>Orders</th><th>Total Volume</th></tr></thead><tbody id="currencyPairsBody"></tbody></table>
+    </div>
+
+    <div class="card row"><h2>Admin Role Assignment</h2><button class="btn" onclick="loadAdmins()">Refresh Admins</button></div>
+    <div class="card"><table class="table"><thead><tr><th>Email</th><th>Role</th><th>Permissions</th><th>Action</th></tr></thead><tbody id="adminsBody"></tbody></table></div>
+    <div class="card row"><h2>Users</h2><button class="btn" onclick="loadUsers()">Refresh Users</button></div>
+    <div class="card"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Country</th><th>KYC</th><th>Referral</th></tr></thead><tbody id="usersBody"></tbody></table></div>
+    <div class="card row"><h2>Exchange Escrow Orders</h2><button class="btn" onclick="loadExchange()">Refresh Exchange</button></div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Pair</th><th>Amount</th><th>Status</th><th>Escrow</th><th>Action</th></tr></thead><tbody id="exchangeBody"></tbody></table></div>
+    <div class="card row"><h2>KYC Approval</h2><button class="btn" onclick="loadKyc()">Refresh KYC</button></div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Country</th><th>National ID</th><th>Tax ID</th><th>Status</th><th>Action</th></tr></thead><tbody id="kycBody"></tbody></table></div>
+    <div class="card row"><h2>Payment Orders</h2><button class="btn" onclick="loadPayments()">Refresh Payments</button></div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Provider</th><th>Amount</th><th>Status</th><th>Gateway Order</th><th>Refund</th></tr></thead><tbody id="paymentsBody"></tbody></table></div>
+    <div class="card row"><h2>Dispute Management</h2><button class="btn" onclick="loadDisputes()">Refresh Disputes</button></div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Transaction</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead><tbody id="disputesBody"></tbody></table></div>
+    <div class="card row"><h2>Complaints / Support Chat</h2><button class="btn" onclick="loadComplaints()">Refresh Complaints</button></div>
+    <div class="card"><table class="table"><thead><tr><th>Subject</th><th>Message</th><th>Status</th><th>Date</th><th>Action</th></tr></thead><tbody id="complaintsBody"></tbody></table></div>
+    <div id="chatModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;align-items:center;justify-content:center;padding:20px">
+      <div style="background:white;border-radius:20px;padding:20px;max-width:520px;width:100%;max-height:80vh;display:flex;flex-direction:column">
+        <div class="row" style="margin-bottom:10px"><h3 id="chatSubject" style="font-size:16px"></h3><button class="btn dark" onclick="closeChatModal()">Close</button></div>
+        <div id="chatMessages" style="flex:1;overflow-y:auto;background:#f4f8ff;border-radius:14px;padding:12px;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px">
+          <input id="chatInput" class="input" style="margin:0" placeholder="Reply likhein...">
+          <button class="btn" onclick="sendChatReply()">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="card row"><h2>Referral Program</h2><button class="btn" onclick="loadReferrals()">Refresh Referrals</button></div>
+    <div class="card"><table class="table"><thead><tr><th>Referrer</th><th>Referred User</th><th>Reward</th><th>Status</th><th>Date</th></tr></thead><tbody id="referralsBody"></tbody></table></div>
+
+    <div class="card row"><h2>Bank Accounts</h2><button class="btn" onclick="loadBankAccounts()">Refresh Bank Accounts</button></div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Bank</th><th>Account</th><th>IFSC/SWIFT</th><th>Status</th><th>Action</th></tr></thead><tbody id="bankAccountsBody"></tbody></table></div>
+
+    <div class="card row"><h2>Withdrawals</h2><button class="btn" onclick="loadWithdrawals()">Refresh Withdrawals</button></div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Bank</th><th>Amount</th><th>Status</th><th>Date</th><th>Action</th></tr></thead><tbody id="withdrawalsBody"></tbody></table></div>
+    <div class="card row"><h2>Admin Audit Logs</h2><button class="btn" onclick="loadAudit()">Refresh Audit</button></div>
+    <div class="card"><table class="table"><thead><tr><th>Action</th><th>Entity</th><th>Admin</th><th>Date</th></tr></thead><tbody id="auditBody"></tbody></table></div>
+
+    <div class="card row"><h2>⚠️ AML Flags (Large/Unusual Transactions)</h2><button class="btn" onclick="loadAmlFlags()">Refresh AML Flags</button></div>
+    <div class="card"><p style="color:#555;font-size:13px;margin-bottom:10px">Transactions that crossed AML review thresholds (see TECHNICAL_SAFEGUARDS_GUIDE.md). These are flagged for manual review, not automatically blocked.</p><table class="table"><thead><tr><th>User</th><th>Reason</th><th>Reference</th><th>Date</th></tr></thead><tbody id="amlFlagsBody"></tbody></table></div>
+
+    <div class="card row"><h2>🧾 Crypto TDS Records (Section 194S)</h2><button class="btn" onclick="loadTdsRecords()">Refresh TDS Records</button></div>
+    <div class="card"><p style="color:#555;font-size:13px;margin-bottom:10px">Per-user, per-financial-year cumulative Virtual Digital Asset transfer value and TDS withheld. Use this to prepare Form 26QE filings with your CA.</p><table class="table"><thead><tr><th>User</th><th>Financial Year</th><th>Cumulative Gross (₹)</th><th>Cumulative TDS (₹)</th><th>Entries</th></tr></thead><tbody id="tdsRecordsBody"></tbody></table></div>
+
+    <div class="card row"><h2>🚫 Sanctions/PEP Screening Flags</h2><div><button class="btn dark" style="margin-right:8px" onclick="syncSanctionsList()">🔄 Sync Full List Now</button><button class="btn" onclick="loadSanctionsFlags()">Refresh Sanctions Flags</button></div></div>
+    <div class="card"><p style="color:#555;font-size:13px;margin-bottom:10px" id="sanctionsListNote">KYC submissions whose name matched an entry in the sanctions dataset. A match NEVER auto-rejects a user — every flag below requires manual review. See FIU_IND_REGISTRATION_GUIDE.md / SANCTIONS_SCREENING_GUIDE.md.</p><table class="table"><thead><tr><th>User</th><th>Matched Against</th><th>Score</th><th>Review Status</th><th>Action</th></tr></thead><tbody id="sanctionsFlagsBody"></tbody></table></div>
+
+    <div class="card row"><h2>✈️ Travel Rule Records (VDA Transfers)</h2><button class="btn" onclick="loadTravelRuleRecords()">Refresh Travel Rule Records</button></div>
+    <div class="card"><p style="color:#555;font-size:13px;margin-bottom:10px">Originator/beneficiary identity data captured for every crypto (BTC/ETH/XRP) transfer, as required under FIU-IND's AML/CFT guidance which treats VDA transfers like wire transfers.</p><table class="table"><thead><tr><th>Currency</th><th>Amount</th><th>Originator</th><th>Beneficiary</th><th>Captured</th></tr></thead><tbody id="travelRuleBody"></tbody></table></div>
+
+    <div class="card row"><h2>📋 Suspicious Transaction Reports (STR)</h2><button class="btn" onclick="loadStrReports()">Refresh STR Reports</button></div>
+    <div class="card">
+      <p style="color:#555;font-size:13px;margin-bottom:10px">This app cannot file STRs with FIU-IND directly — filing is a manual submission your Principal Officer must do via the FIU-IND FINGate portal. This tracks the case lifecycle (draft → filed → acknowledged) for your records. See FIU_IND_REGISTRATION_GUIDE.md.</p>
+      <input id="strUserId" class="input" placeholder="User ID (from a flagged transaction/user)">
+      <input id="strReason" class="input" placeholder="Reason (e.g. 'Large unusual crypto transfer pattern')">
+      <input id="strNotes" class="input" placeholder="Notes (optional)">
+      <button class="btn dark" onclick="createStrReport()">Create Draft STR Case</button>
+    </div>
+    <div class="card"><table class="table"><thead><tr><th>User</th><th>Reason</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody id="strReportsBody"></tbody></table></div>
+  </section>
+</div>
+<script>
+// -----------------------------------------------------------------------
+// SECURITY: escapeHtml() must wrap every piece of user-supplied data (name,
+// email, complaint text, KYC fields, etc.) before it is inserted via
+// innerHTML/template literals. Without this, a user could put something
+// like <img src=x onerror=alert(1)> in their name/complaint and it would
+// execute inside the admin's browser session (stored XSS) — potentially
+// stealing the admin's auth token from localStorage.
+// -----------------------------------------------------------------------
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// Access tokens are now short-lived (15 min) — see SECURITY_HARDENING_GUIDE.md
+// and the login-security-upgrade notes. `refreshToken` (30 days, revocable) is
+// used to silently obtain a new access token when the current one expires,
+// so a long admin working session doesn't get interrupted every 15 minutes.
+let token = localStorage.getItem('gx_admin_token') || '';
+let refreshToken = localStorage.getItem('gx_admin_refresh_token') || '';
+let baseUrl = localStorage.getItem('gx_api') || 'https://global-exchanger.onrender.com';
+document.getElementById('api').value = baseUrl;
+function headers(){return {'Content-Type':'application/json','Authorization':'Bearer '+token}}
+
+async function tryRefreshToken(){
+  if(!refreshToken) return false;
+  try{
+    const r = await fetch(baseUrl+'/api/auth/refresh', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({refreshToken})});
+    if(!r.ok) { token=''; refreshToken=''; localStorage.removeItem('gx_admin_token'); localStorage.removeItem('gx_admin_refresh_token'); return false; }
+    const d = await r.json();
+    token = d.token; refreshToken = d.refreshToken;
+    localStorage.setItem('gx_admin_token', token); localStorage.setItem('gx_admin_refresh_token', refreshToken);
+    return true;
+  } catch(e){ return false; }
+}
+
+async function request(path, options={}){
+  let r=await fetch(baseUrl+path, options);
+  let d=await r.json().catch(()=>({}));
+  if(r.status === 401 && d.code === 'TOKEN_EXPIRED'){
+    const refreshed = await tryRefreshToken();
+    if(refreshed){
+      const retryOptions = {...options};
+      if(retryOptions.headers) retryOptions.headers = {...retryOptions.headers, ...headers()};
+      r = await fetch(baseUrl+path, retryOptions);
+      d = await r.json().catch(()=>({}));
+    }
+  }
+  if(!r.ok){
+    if(r.status === 401){ logout(); }
+    throw new Error(d.error||'API error');
+  }
+  return d;
+}
+
+async function adminLogin(){
+  baseUrl=document.getElementById('api').value.trim(); localStorage.setItem('gx_api',baseUrl);
+  try{
+    const d=await request('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email.value,password:password.value,specialKey:specialKey.value})});
+    token=d.token; refreshToken=d.refreshToken;
+    localStorage.setItem('gx_admin_token',token); localStorage.setItem('gx_admin_refresh_token',refreshToken);
+    password.value=''; specialKey.value=''; showPanel();
+  }
+  catch(e){loginErr.textContent=e.message}
+}
+function logout(){
+  if(refreshToken){ fetch(baseUrl+'/api/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken})}).catch(()=>{}); }
+  localStorage.removeItem('gx_admin_token'); localStorage.removeItem('gx_admin_refresh_token');
+  token=''; refreshToken=''; login.style.display='block'; panel.style.display='none';
+}
+function showPanel(){login.style.display='none'; panel.style.display='block'; apiLabel.textContent='API: '+baseUrl; loadDashboard(); loadAnalytics(); loadAdmins(); loadUsers(); loadExchange(); loadKyc(); loadPayments(); loadDisputes(); loadComplaints(); loadReferrals(); loadBankAccounts(); loadWithdrawals(); loadAudit(); loadAmlFlags(); loadTdsRecords(); loadSanctionsFlags(); loadTravelRuleRecords(); loadStrReports();}
+async function loadDashboard(){
+  const d=await request('/api/admin/dashboard',{headers:headers()});
+  mUsers.textContent=d.users||0; mKyc.textContent=d.kycPending||0; mTxn.textContent=d.transactions||0; mComp.textContent=d.complaints||0; mComm.textContent='₹'+Number(d.adminCommission||0).toFixed(2);
+  const today = d.today || {};
+  tUsers.textContent = today.newUsers || 0;
+  tTxn.textContent = today.transactions || 0;
+  tRev.textContent = '₹'+Number(today.revenue||0).toFixed(2);
+  tVol.textContent = '₹'+Number(today.paymentVolume||0).toFixed(2);
+  tOpen.textContent = (d.openComplaints||0) + (d.openDisputes||0);
+}
+
+// ---------------------------------------------------------------------------
+// Lightweight, dependency-free chart rendering using the native Canvas API.
+// No external chart library / CDN is loaded, so the panel keeps working even
+// with no internet access to third-party scripts (e.g. inside the in-app
+// preview sandbox) and there's nothing extra to keep updated for security.
+// ---------------------------------------------------------------------------
+function drawLineChart(canvasId, labels, series, color){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 400, h = canvas.height || 160;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0,0,w,h);
+
+  if(!series.length){ ctx.fillStyle='#999'; ctx.font='13px Arial'; ctx.fillText('No data for this period', 10, h/2); return; }
+
+  const maxVal = Math.max(...series, 1);
+  const padding = 24;
+  const stepX = (w - padding*2) / Math.max(series.length - 1, 1);
+
+  ctx.strokeStyle = '#eef2fb'; ctx.lineWidth = 1;
+  for(let i=0;i<=4;i++){ const y = padding + (h - padding*2) * (i/4); ctx.beginPath(); ctx.moveTo(padding,y); ctx.lineTo(w-padding,y); ctx.stroke(); }
+
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.beginPath();
+  series.forEach((v,i)=>{
+    const x = padding + i*stepX;
+    const y = h - padding - (v/maxVal)*(h-padding*2);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = color;
+  series.forEach((v,i)=>{
+    const x = padding + i*stepX;
+    const y = h - padding - (v/maxVal)*(h-padding*2);
+    ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+  });
+
+  ctx.fillStyle = '#888'; ctx.font = '10px Arial';
+  if(labels.length){
+    ctx.fillText(labels[0], padding, h-4);
+    ctx.fillText(labels[labels.length-1], w-padding-40, h-4);
+  }
+  ctx.fillText(maxVal.toFixed(0), 2, padding+4);
+}
+
+function drawBarChart(canvasId, entries, colors){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 400, h = canvas.height || 160;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0,0,w,h);
+
+  if(!entries.length){ ctx.fillStyle='#999'; ctx.font='13px Arial'; ctx.fillText('No data for this period', 10, h/2); return; }
+
+  const maxVal = Math.max(...entries.map(e=>e.value), 1);
+  const padding = 24;
+  const barWidth = (w - padding*2) / entries.length * 0.6;
+  const gap = (w - padding*2) / entries.length;
+
+  entries.forEach((e,i)=>{
+    const barHeight = (e.value/maxVal) * (h - padding*2);
+    const x = padding + i*gap + (gap-barWidth)/2;
+    const y = h - padding - barHeight;
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fillRect(x, y, barWidth, barHeight);
+    ctx.fillStyle = '#333'; ctx.font = '10px Arial'; ctx.textAlign='center';
+    ctx.fillText(e.value, x+barWidth/2, y-4);
+    ctx.fillText(e.label.length>10?e.label.slice(0,10)+'…':e.label, x+barWidth/2, h-6);
+  });
+  ctx.textAlign='left';
+}
+
+const CHART_COLORS = ['#0967ff','#00b876','#ffa000','#e53935','#8a05ff','#00c48c','#f347ff'];
+
+async function loadAnalytics(){
+  const days = document.getElementById('analyticsRange').value;
+  const d = await request('/api/admin/analytics?days='+days, {headers:headers()});
+
+  drawLineChart('chartRevenue', d.revenueByDay.map(r=>r.day.slice(5)), d.revenueByDay.map(r=>Number(r.revenue)), '#0967ff');
+  drawLineChart('chartUsers', d.usersByDay.map(r=>r.day.slice(5)), d.usersByDay.map(r=>Number(r.count)), '#00b876');
+  drawLineChart('chartTxns', d.transactionsByDay.map(r=>r.day.slice(5)), d.transactionsByDay.map(r=>Number(r.count)), '#ffa000');
+
+  drawBarChart('chartPayments', d.paymentStatusBreakdown.map(p=>({label:p.status,value:Number(p.count)})), CHART_COLORS);
+  drawBarChart('chartExchangeStatus', d.exchangeStatusBreakdown.map(p=>({label:p.status,value:Number(p.count)})), CHART_COLORS);
+  drawBarChart('chartKyc', d.kycBreakdown.map(p=>({label:p.status,value:Number(p.count)})), CHART_COLORS);
+
+  currencyPairsBody.innerHTML = d.exchangeByCurrency.map(p=>`<tr><td>${escapeHtml(p.from_currency)} → ${escapeHtml(p.to_currency)}</td><td>${escapeHtml(p.order_count)}</td><td>${escapeHtml(Number(p.total_amount).toFixed(2))}</td></tr>`).join('') || '<tr><td colspan="3">No exchange orders in this period</td></tr>';
+}
+async function loadUsers(){const rows=await request('/api/admin/users',{headers:headers()}); usersBody.innerHTML=rows.map(u=>`<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.country)}</td><td><span class="pill">${escapeHtml(u.kycStatus||u.kyc_status||'pending')}</span></td><td>${escapeHtml(u.referralCode||u.referral_code)}</td></tr>`).join('')||'<tr><td colspan="5">No users</td></tr>'; loadDashboard();}
+async function loadComplaints(){const rows=await request('/api/admin/complaints',{headers:headers()}); complaintsBody.innerHTML=rows.map(c=>`<tr style="${c.hasUnread?'background:#eef5ff':''}"><td>${c.hasUnread?'<span class="pill" style="background:#dbeafe;color:#0967ff">NEW</span> ':''}${escapeHtml(c.subject)}</td><td>${escapeHtml(c.message)}</td><td><span class="pill">${escapeHtml(c.status)}</span></td><td>${escapeHtml(new Date(c.created_at||c.createdAt).toLocaleString())}</td><td><button class="btn" style="padding:8px 12px" onclick="openChatModal('${c.id}', ${JSON.stringify(c.subject||'Complaint').replace(/"/g,'&quot;')})">💬 Chat${c.hasUnread?' 🔴':''}</button></td></tr>`).join('')||'<tr><td colspan="5">No complaints</td></tr>'; loadDashboard(); loadComplaintsUnreadBadge();}
+
+async function loadComplaintsUnreadBadge(){
+  try{
+    const d = await request('/api/admin/complaints/unread-count', {headers:headers()});
+    const el = document.getElementById('mCompUnread');
+    if(el) el.textContent = d.unreadCount > 0 ? `${d.unreadCount} unread` : '';
+  } catch(e){ /* silent */ }
+}
+
+// ---------------------------------------------------------------------------
+// In-App Support Chat (admin side) — lets support staff reply directly
+// within a complaint's thread, mirroring the user-side chat in the app.
+// ---------------------------------------------------------------------------
+let activeChatComplaintId = null;
+let chatPollTimer = null;
+
+async function openChatModal(complaintId, subject){
+  activeChatComplaintId = complaintId;
+  chatSubject.textContent = subject;
+  chatModal.style.display = 'flex';
+  await refreshChatMessages();
+  if(chatPollTimer) clearInterval(chatPollTimer);
+  chatPollTimer = setInterval(refreshChatMessages, 8000);
+}
+
+function closeChatModal(){
+  chatModal.style.display = 'none';
+  activeChatComplaintId = null;
+  if(chatPollTimer){ clearInterval(chatPollTimer); chatPollTimer = null; }
+}
+
+async function refreshChatMessages(){
+  if(!activeChatComplaintId) return;
+  try{
+    const d = await request(`/api/admin/complaints/${activeChatComplaintId}/messages`, {headers:headers()});
+    const msgs = d.messages || [];
+    chatMessages.innerHTML = msgs.map(m => {
+      const isAdmin = (m.senderType||m.sender_type) === 'admin';
+      const sender = escapeHtml(m.senderName||m.sender_name||(isAdmin?'Support':'User'));
+      const text = escapeHtml(m.message);
+      const align = isAdmin ? 'right' : 'left';
+      const bg = isAdmin ? '#0967ff' : 'white';
+      const color = isAdmin ? 'white' : '#0f172a';
+      return `<div style="text-align:${align};margin-bottom:8px"><div style="display:inline-block;max-width:80%;background:${bg};color:${color};padding:8px 12px;border-radius:12px;text-align:left"><div style="font-size:10px;opacity:.7;font-weight:800">${sender}</div>${text}</div></div>`;
+    }).join('') || '<p style="color:#888;text-align:center">No messages yet.</p>';
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  } catch(e){ /* silent - keep last known state on transient failure */ }
+}
+
+async function sendChatReply(){
+  const text = chatInput.value.trim();
+  if(!text || !activeChatComplaintId) return;
+  try{
+    await request(`/api/admin/complaints/${activeChatComplaintId}/messages`, {method:'POST', headers:headers(), body: JSON.stringify({message:text})});
+    chatInput.value = '';
+    await refreshChatMessages();
+  } catch(e){ alert(e.message); }
+}
+async function loadReferrals(){
+  const rows=await request('/api/admin/referrals',{headers:headers()});
+  referralsBody.innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.referrer?.name)}<br><small>${escapeHtml(r.referrer?.email)}</small></td><td>${escapeHtml(r.referred?.name)}<br><small>${escapeHtml(r.referred?.email)}</small></td><td>${escapeHtml(r.currency)} ${escapeHtml(r.reward)}</td><td><span class="pill">${escapeHtml(r.status)}</span></td><td>${escapeHtml(new Date(r.created_at||r.createdAt).toLocaleString())}</td></tr>`).join('')||'<tr><td colspan="5">No referrals yet</td></tr>';
+}
+
+async function loadBankAccounts(){
+  const rows=await request('/api/admin/bank-accounts',{headers:headers()});
+  bankAccountsBody.innerHTML=rows.map(a=>{
+    const isVerified = !!(a.verifiedAt||a.verified_at);
+    return `<tr><td>${escapeHtml(a.user?.name)}<br><small>${escapeHtml(a.user?.email)}</small></td><td>${escapeHtml(a.bankName||a.bank_name)}</td><td>${escapeHtml(a.accountNumberMasked||a.account_number_masked)}</td><td>${escapeHtml(a.ifscSwiftIban||a.ifsc_swift_iban)}</td><td><span class="pill">${isVerified?'Verified':'Pending'}</span></td><td>${isVerified
+      ? `<button class="btn dark" onclick="verifyBankAccount('${a.id}',false)">Unverify</button>`
+      : `<button class="btn" onclick="verifyBankAccount('${a.id}',true)">Verify</button>`}</td></tr>`;
+  }).join('')||'<tr><td colspan="6">No bank accounts</td></tr>';
+}
+async function verifyBankAccount(id,verified){
+  const note = verified ? prompt('Verification note (optional)','') : prompt('Reason for unverifying (optional)','');
+  await request('/api/admin/bank-accounts/'+id+'/verify',{method:'PATCH',headers:headers(),body:JSON.stringify({verified,note})});
+  loadBankAccounts();
+}
+
+async function loadWithdrawals(){
+  const rows=await request('/api/admin/withdrawals',{headers:headers()});
+  withdrawalsBody.innerHTML=rows.map(w=>{
+    const bank = w.bankAccount || w.bank_account || {};
+    const isFinal = ['completed','rejected','cancelled'].includes(w.status);
+    const actions = isFinal ? '' : `
+      <button class="btn" onclick="updateWithdrawal('${w.id}','approved')">Approve</button>
+      <button class="btn" onclick="updateWithdrawal('${w.id}','processing')">Processing</button>
+      <button class="btn" onclick="updateWithdrawal('${w.id}','completed')">Complete</button>
+      <button class="btn dark" onclick="updateWithdrawal('${w.id}','rejected')">Reject</button>`;
+    return `<tr><td>${escapeHtml(w.user?.name)}<br><small>${escapeHtml(w.user?.email)}</small></td><td>${escapeHtml(bank.bankName||bank.bank_name)}<br><small>${escapeHtml(bank.accountNumberMasked||bank.account_number_masked)}</small></td><td>${escapeHtml(w.currency)} ${escapeHtml(w.amount)}</td><td><span class="pill">${escapeHtml(w.status)}</span></td><td>${escapeHtml(new Date(w.created_at||w.createdAt).toLocaleString())}</td><td>${actions}</td></tr>`;
+  }).join('')||'<tr><td colspan="6">No withdrawals</td></tr>';
+}
+async function updateWithdrawal(id,status){
+  const adminNote = prompt('Admin note (optional)', status==='rejected' ? 'Reason for rejection' : '');
+  if(adminNote===null) return;
+  await request('/api/admin/withdrawals/'+id,{method:'PATCH',headers:headers(),body:JSON.stringify({status,adminNote})});
+  loadWithdrawals(); loadDashboard(); loadAudit();
+}
+async function loadKyc(){
+  const rows=await request('/api/admin/kyc-requests',{headers:headers()});
+  kycBody.innerHTML=rows.map(k=>`<tr><td>${escapeHtml(k.user?.name)}<br><small>${escapeHtml(k.user?.email)}</small></td><td>${escapeHtml(k.country)}</td><td>${escapeHtml(k.nationalId||k.national_id)}</td><td>${escapeHtml(k.taxId||k.tax_id)}</td><td><span class="pill">${escapeHtml(k.status)}</span><br><small>${(k.documentNames||k.document_names||[]).length} doc(s)</small></td><td><button class="btn" onclick="viewKycDocuments('${k.id}')">View Docs</button> <button class="btn" onclick="updateKyc('${k.id}','approved')">Approve</button> <button class="btn dark" onclick="updateKyc('${k.id}','rejected')">Reject</button></td></tr>`).join('')||'<tr><td colspan="6">No KYC requests</td></tr>';
+}
+async function updateKyc(id,status){await request('/api/admin/kyc/'+id,{method:'PATCH',headers:headers(),body:JSON.stringify({status})}); loadKyc(); loadDashboard();}
+async function viewKycDocuments(id){
+  try{
+    const data = await request('/api/admin/kyc-requests/'+id+'/documents',{headers:headers()});
+    const docs = data.documents || [];
+    if(docs.length === 0){ alert('Is KYC request ke saath koi document upload nahi hua.'); return; }
+    const win = window.open('', '_blank');
+    if(!win){ alert('Popup blocked. Please allow popups for this site.'); return; }
+    // Only mimeType/label/dataBase64 (already validated by the backend allowlist)
+    // are used here — still escaped defensively since this renders in a new tab.
+    const body = docs.map(d => {
+      const safeLabel = escapeHtml(d.label);
+      const safeMime = encodeURIComponent(d.mimeType || '');
+      if((d.mimeType||'').startsWith('image/')){
+        return `<div style="margin-bottom:24px"><h3>${safeLabel}</h3><img src="data:${safeMime};base64,${d.dataBase64}" style="max-width:100%;border-radius:12px;border:1px solid #ddd" /></div>`;
+      }
+      return `<div style="margin-bottom:24px"><h3>${safeLabel}</h3><a download="${safeLabel}" href="data:${safeMime};base64,${d.dataBase64}">Download ${safeLabel}</a></div>`;
+    }).join('');
+    win.document.write(`<html><head><title>KYC Documents</title></head><body style="font-family:Arial;padding:24px;background:#0f172a;color:white">${body}</body></html>`);
+    win.document.close();
+  } catch(e){ alert('Failed to load documents: ' + e.message); }
+}
+async function loadPayments(){
+  const rows=await request('/api/admin/payment-orders',{headers:headers()});
+  paymentsBody.innerHTML=rows.map(o=>`<tr><td>${escapeHtml(o.user?.name)}<br><small>${escapeHtml(o.user?.email)}</small></td><td>${escapeHtml(o.provider)}</td><td>${escapeHtml(o.currency)} ${escapeHtml(o.amount)}</td><td><span class="pill">${escapeHtml(o.status)}</span></td><td>${escapeHtml(o.gatewayOrderId||o.gateway_order_id)}</td><td>${(o.status==='paid')?`<button class="btn dark" onclick="refundOrder('${o.id}')">Refund</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6">No payment orders</td></tr>';
+}
+
+async function loadAdmins(){
+  const rows=await request('/api/admin/admins',{headers:headers()});
+  adminsBody.innerHTML=rows.map(a=>`<tr><td>${escapeHtml(a.email)}</td><td>${escapeHtml(a.role)}</td><td><small>${escapeHtml((a.permissions||[]).join(', '))}</small></td><td><button class="btn" onclick="editAdminRole('${a.id}','${a.role||'support_agent'}','${(a.permissions||[]).join(',')}')">Edit</button></td></tr>`).join('')||'<tr><td colspan="4">No admins</td></tr>';
+}
+async function editAdminRole(id,currentRole,currentPerms){
+  const role=prompt('Role: super_admin / kyc_manager / finance_manager / support_agent', currentRole); if(!role) return;
+  const perms=prompt('Comma permissions', currentPerms); if(perms===null) return;
+  await request('/api/admin/admins/'+id+'/role',{method:'PATCH',headers:headers(),body:JSON.stringify({role,permissions:perms.split(',').map(x=>x.trim()).filter(Boolean)})});
+  loadAdmins(); loadAudit(); alert('Role updated');
+}
+async function loadDisputes(){
+  const rows=await request('/api/admin/disputes',{headers:headers()});
+  disputesBody.innerHTML=rows.map(d=>`<tr><td>${escapeHtml(d.user?.name)}<br><small>${escapeHtml(d.user?.email)}</small></td><td>${escapeHtml(d.transactionId||d.transaction_id)}</td><td>${escapeHtml(d.reason)}<br><small>${escapeHtml(d.message)}</small></td><td><span class="pill">${escapeHtml(d.status)}</span></td><td><button class="btn" onclick="updateDispute('${d.id}')">Update</button></td></tr>`).join('')||'<tr><td colspan="5">No disputes</td></tr>';
+}
+async function updateDispute(id){
+  const status=prompt('Status: submitted / under_review / resolved / rejected', 'under_review'); if(!status) return;
+  const adminNote=prompt('Admin note', '');
+  const resolution=prompt('Resolution', '');
+  await request('/api/admin/disputes/'+id,{method:'PATCH',headers:headers(),body:JSON.stringify({status,adminNote,resolution})});
+  loadDisputes(); loadAudit(); alert('Dispute updated');
+}
+
+async function loadExchange(){
+  const rows=await request('/api/admin/exchange/orders',{headers:headers()});
+  exchangeBody.innerHTML=rows.map(o=>`<tr><td>${escapeHtml(o.user?.name)}<br><small>${escapeHtml(o.user?.email)}</small></td><td>${escapeHtml(o.fromCurrency||o.from_currency)} → ${escapeHtml(o.toCurrency||o.to_currency)}</td><td>${escapeHtml(o.amount)}</td><td><span class="pill">${escapeHtml(o.status)}</span></td><td>${escapeHtml(o.escrowStatus||o.escrow_status)}</td><td><button class="btn" onclick="completeExchange('${o.id}')">Complete</button> <button class="btn dark" onclick="cancelExchange('${o.id}')">Cancel</button></td></tr>`).join('')||'<tr><td colspan="6">No exchange orders</td></tr>';
+}
+async function completeExchange(id){const rate=prompt('Enter rate / receive amount multiplier', '1'); if(!rate) return; await request('/api/admin/exchange/orders/'+id+'/complete',{method:'POST',headers:headers(),body:JSON.stringify({rate:Number(rate)})}); loadExchange(); loadDashboard(); alert('Exchange completed');}
+async function cancelExchange(id){if(!confirm('Cancel exchange?')) return; await request('/api/admin/exchange/orders/'+id+'/cancel',{method:'POST',headers:headers()}); loadExchange(); loadDashboard();}
+async function loadAudit(){const rows=await request('/api/admin/audit-logs',{headers:headers()}); auditBody.innerHTML=rows.map(a=>`<tr><td>${escapeHtml(a.action)}</td><td>${escapeHtml(a.entityType||a.entity_type)}: ${escapeHtml(a.entityId||a.entity_id)}</td><td>${escapeHtml(a.adminId||a.admin_id)}</td><td>${escapeHtml(new Date(a.createdAt||a.created_at).toLocaleString())}</td></tr>`).join('')||'<tr><td colspan="4">No audit logs</td></tr>';}
+
+async function refundOrder(id){ if(!confirm('Refund this payment order?')) return; await request('/api/payments/refund',{method:'POST',headers:headers(),body:JSON.stringify({orderId:id,reason:'admin_panel_refund'})}); loadPayments(); loadDashboard(); alert('Refund processed');}
+
+async function loadAmlFlags(){
+  const rows = await request('/api/admin/aml-flags',{headers:headers()});
+  amlFlagsBody.innerHTML = rows.map(a=>{
+    const u = a.user || {};
+    const reasons = (a.metadata && a.metadata.reasons) ? a.metadata.reasons.join('; ') : '';
+    return `<tr><td>${escapeHtml(u.name||'')} (${escapeHtml(u.email||a.userId||a.user_id)})</td><td>${escapeHtml(reasons)}</td><td>${escapeHtml(a.entityType||a.entity_type)}: ${escapeHtml(a.entityId||a.entity_id)}</td><td>${escapeHtml(new Date(a.createdAt||a.created_at).toLocaleString())}</td></tr>`;
+  }).join('') || '<tr><td colspan="4">No AML flags — no large/unusual transactions detected yet</td></tr>';
+}
+
+async function loadTdsRecords(){
+  const rows = await request('/api/admin/tds-records',{headers:headers()});
+  tdsRecordsBody.innerHTML = rows.map(t=>{
+    const u = t.user || {};
+    const entryCount = (t.entries || []).length;
+    return `<tr><td>${escapeHtml(u.name||'')} (${escapeHtml(u.email||t.userId||t.user_id)})</td><td>${escapeHtml(t.financialYear||t.financial_year)}</td><td>₹${escapeHtml(t.cumulativeGrossInr||t.cumulative_gross_inr)}</td><td>₹${escapeHtml(t.cumulativeTdsInr||t.cumulative_tds_inr)}</td><td>${entryCount} deduction(s)</td></tr>`;
+  }).join('') || '<tr><td colspan="5">No crypto TDS deductions recorded yet</td></tr>';
+}
+
+async function syncSanctionsList(){
+  if (!confirm('Yeh official OFAC (US Treasury) aur UN Security Council sanctions lists se ~5-10MB data download karke poori list refresh karega. Isme 5-30 second lag sakte hain. Continue karein?')) return;
+  sanctionsListNote.textContent = '🔄 Syncing from official sources... please wait, this can take up to 30 seconds.';
+  try {
+    const resp = await request('/api/admin/sanctions-sync',{method:'POST',headers:headers()});
+    alert(resp.message || 'Sync completed.');
+  } catch (e) {
+    alert('Sync failed: ' + (e.message || e));
+  }
+  loadSanctionsFlags();
+}
+
+async function loadSanctionsFlags(){
+  const resp = await request('/api/admin/sanctions-flags',{headers:headers()});
+  const meta = resp.metadata || {};
+  sanctionsListNote.textContent = `KYC submissions whose name matched an entry in the sanctions dataset (${escapeHtml(meta.entryCount||0)} entries, source: ${escapeHtml((meta.sources||[]).join(', '))}). A match NEVER auto-rejects a user — every flag below requires manual review. ${meta.note||''}`;
+  const flags = resp.flags || [];
+  sanctionsFlagsBody.innerHTML = flags.map(f=>{
+    const u = f.user || {};
+    const top = (f.matches||[])[0] || {};
+    const statusColor = f.reviewStatus === 'confirmed_match' ? '#dc2626' : (f.reviewStatus === 'false_positive' ? '#00935e' : '#b45309');
+    return `<tr>
+      <td>${escapeHtml(u.name||'')} (${escapeHtml(u.email||f.userId)})</td>
+      <td>${escapeHtml(top.entry ? top.entry.name : '')} <span style="color:#888">[${escapeHtml(top.entry ? top.entry.programs : '')}]</span></td>
+      <td>${escapeHtml(top.score||'')}</td>
+      <td><span style="color:${statusColor};font-weight:800">${escapeHtml(f.reviewStatus||'pending_review')}</span></td>
+      <td>
+        ${f.reviewStatus && f.reviewStatus !== 'pending_review' ? escapeHtml(f.reviewNote||'') : `
+          <button class="btn" style="padding:6px 10px;font-size:12px" onclick="reviewSanctionsFlag('${f.kycRequestId}','false_positive')">Dismiss (False Positive)</button>
+          <button class="btn dark" style="padding:6px 10px;font-size:12px" onclick="reviewSanctionsFlag('${f.kycRequestId}','confirmed_match')">Confirm Match</button>
+        `}
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5">No sanctions/PEP matches found in submitted KYC requests</td></tr>';
+}
+
+async function reviewSanctionsFlag(kycRequestId, reviewStatus){
+  const reviewNote = prompt(reviewStatus === 'confirmed_match' ? 'Note for confirming this match (this user should likely also be KYC-rejected separately):' : 'Note for dismissing as false positive:', '');
+  if (reviewNote === null) return;
+  await request(`/api/admin/sanctions-flags/${kycRequestId}`,{method:'PATCH',headers:headers(),body:JSON.stringify({reviewStatus, reviewNote})});
+  loadSanctionsFlags();
+}
+
+async function loadTravelRuleRecords(){
+  const rows = await request('/api/admin/travel-rule-records',{headers:headers()});
+  travelRuleBody.innerHTML = rows.map(t=>{
+    const o = t.originator || {}, b = t.beneficiary || {};
+    return `<tr><td>${escapeHtml(t.currency)}</td><td>${escapeHtml(t.amount)}</td><td>${escapeHtml(o.name||'')} (last4: ${escapeHtml(o.nationalIdLast4||'N/A')})</td><td>${escapeHtml(b.name||'')} (last4: ${escapeHtml(b.nationalIdLast4||'N/A')})</td><td>${escapeHtml(new Date(t.capturedAt||t.captured_at).toLocaleString())}</td></tr>`;
+  }).join('') || '<tr><td colspan="5">No VDA transfers recorded yet</td></tr>';
+}
+
+async function loadStrReports(){
+  const rows = await request('/api/admin/str-reports',{headers:headers()});
+  strReportsBody.innerHTML = rows.map(s=>{
+    const u = s.userSnapshot || s.user_snapshot || {};
+    const statusOptions = ['draft','filed','acknowledged','closed'];
+    const select = `<select onchange="updateStrStatus('${s.id}', this.value)" style="padding:4px;border-radius:6px">${statusOptions.map(opt=>`<option value="${opt}" ${s.status===opt?'selected':''}>${opt}</option>`).join('')}</select>`;
+    return `<tr><td>${escapeHtml(u.name||'')} (${escapeHtml(u.email||s.userId||s.user_id)})</td><td>${escapeHtml(s.reason)}</td><td>${select}</td><td>${escapeHtml(new Date(s.createdAt||s.created_at).toLocaleString())}</td><td>${escapeHtml(s.notes||'')}</td></tr>`;
+  }).join('') || '<tr><td colspan="5">No STR cases created yet</td></tr>';
+}
+
+async function createStrReport(){
+  const userId = strUserId.value.trim();
+  const reason = strReason.value.trim();
+  const notes = strNotes.value.trim();
+  if (!userId || !reason) { alert('User ID and Reason are required'); return; }
+  await request('/api/admin/str-reports',{method:'POST',headers:headers(),body:JSON.stringify({userId, reason, notes})});
+  strUserId.value=''; strReason.value=''; strNotes.value='';
+  loadStrReports();
+  alert('Draft STR case created. Remember: you must still manually file this with FIU-IND via the FINGate portal — this only tracks the case for your records.');
+}
+
+async function updateStrStatus(id, status){
+  await request(`/api/admin/str-reports/${id}`,{method:'PATCH',headers:headers(),body:JSON.stringify({status})});
+  loadStrReports();
+}
+
+if(token) showPanel();
+</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b98db66d2b5f1d',t:'MTc4NDEyNjc1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
