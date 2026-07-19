@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "426815343382",
+    "project_id": "global-exchanger-7e773",
+    "storage_bucket": "global-exchanger-7e773.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:426815343382:android:7dd97539f83df02a4d9e37",
+        "android_client_info": {
+          "package_name": "com.example.global_exchanger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwKbEpY7LcrvuLSnI208vIZn2qfYkj8uM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
